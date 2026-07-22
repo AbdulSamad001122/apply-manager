@@ -7,6 +7,11 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', postLink: '', accountLink: '' });
   const [editingId, setEditingId] = useState(null);
+  
+  const [copiedId, setCopiedId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteModalId, setDeleteModalId] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -17,6 +22,7 @@ function App() {
   }, [currentPage]);
 
   const fetchApplications = async () => {
+    setIsLoading(true);
     try {
       const response = await fetch(`${API_URL}?page=${currentPage}&limit=5&search=${encodeURIComponent(searchTerm)}`);
       if (response.ok) {
@@ -26,6 +32,8 @@ function App() {
       }
     } catch (error) {
       console.error('Error fetching applications:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -36,6 +44,7 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       const method = editingId ? 'PUT' : 'POST';
       const url = editingId ? `${API_URL}/${editingId}` : API_URL;
@@ -54,6 +63,8 @@ function App() {
       }
     } catch (error) {
       console.error('Error saving application:', error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -68,18 +79,23 @@ function App() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this application?')) {
-      try {
-        const response = await fetch(`${API_URL}/${id}`, {
-          method: 'DELETE',
-        });
-        if (response.ok) {
-          fetchApplications();
-        }
-      } catch (error) {
-        console.error('Error deleting application:', error);
+  const handleDelete = (id) => {
+    setDeleteModalId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteModalId) return;
+    try {
+      const response = await fetch(`${API_URL}/${deleteModalId}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        fetchApplications();
       }
+    } catch (error) {
+      console.error('Error deleting application:', error);
+    } finally {
+      setDeleteModalId(null);
     }
   };
 
@@ -87,6 +103,14 @@ function App() {
     setFormData({ name: '', email: '', postLink: '', accountLink: '' });
     setEditingId(null);
     setShowForm(false);
+  };
+
+  const handleCopy = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => {
+      setCopiedId(null);
+    }, 1500);
   };
 
   return (
@@ -159,8 +183,15 @@ function App() {
               <button type="button" className="btn btn-secondary" onClick={resetForm}>
                 Cancel
               </button>
-              <button type="submit" className="btn btn-primary">
-                {editingId ? 'Update' : 'Save'} Application
+              <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px', margin: '0 8px 0 0' }}></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>{editingId ? 'Update' : 'Save'} Application</>
+                )}
               </button>
             </div>
           </form>
@@ -185,7 +216,12 @@ function App() {
       )}
 
       <div className="applications-list">
-        {applications.length === 0 && !showForm ? (
+        {isLoading ? (
+          <div className="loading-container">
+            <div className="spinner"></div>
+            <p>Loading applications...</p>
+          </div>
+        ) : applications.length === 0 && !showForm ? (
           <div className="empty-state">
             <p>No job applications saved yet. Click "New Application" to add one.</p>
           </div>
@@ -194,8 +230,22 @@ function App() {
             <div key={app._id} className="card">
               <div className="card-header">
                 <div>
-                  <h3 className="card-title">{app.name}</h3>
-                  <div className="card-subtitle">{app.email}</div>
+                  <h3 
+                    className="card-title copyable" 
+                    onClick={() => handleCopy(app.name, `${app._id}-name`)}
+                    title="Click to copy"
+                  >
+                    {app.name}
+                    {copiedId === `${app._id}-name` && <span className="copy-feedback">Copied!</span>}
+                  </h3>
+                  <div 
+                    className="card-subtitle copyable" 
+                    onClick={() => handleCopy(app.email, `${app._id}-email`)}
+                    title="Click to copy"
+                  >
+                    {app.email}
+                    {copiedId === `${app._id}-email` && <span className="copy-feedback">Copied!</span>}
+                  </div>
                 </div>
                 <div className="card-actions">
                   <button className="edit-btn" onClick={() => handleEdit(app)} title="Edit">
@@ -238,6 +288,23 @@ function App() {
           >
             Next
           </button>
+        </div>
+      )}
+
+      {deleteModalId && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Delete Application</h3>
+            <p>Are you sure you want to delete this application? This action cannot be undone.</p>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setDeleteModalId(null)}>
+                Cancel
+              </button>
+              <button className="btn btn-danger" onClick={confirmDelete}>
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
