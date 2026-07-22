@@ -10,9 +10,18 @@ class Database {
   }
 
   _connect() {
-    const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/job-applications';
+    const uri = process.env.MONGODB_URI;
     
-    mongoose.connect(uri)
+    if (!uri && process.env.NODE_ENV !== 'development') {
+      console.error('FATAL ERROR: MONGODB_URI environment variable is not defined.');
+      // Don't try localhost in production/Vercel
+    }
+    
+    const connectUri = uri || 'mongodb://localhost:27017/job-applications';
+
+    mongoose.connect(connectUri, {
+      serverSelectionTimeoutMS: 3000 // Fail after 3 seconds instead of hanging for 10s
+    })
       .then(() => {
         console.log('Database connection successful');
       })
